@@ -5,7 +5,7 @@
 <h1 align="center">CapCraft for Android</h1>
 
 <p align="center">
-  <b>CapCraft-android is an open-source mobile video editor, built on the Rust engine of <a href="https://github.com/jub0t/concat">Concat</a>, a desktop video editor, and on a Kotlin/Jetpack Compose UI framework. Everything is made on the phone: no account, no cloud, nothing uploaded.</b><br>
+  <b>CapCraft-android is an open-source reimplementation of the CapCut android app.</b><br>
   Many credits to the original maintainers, <a href="https://github.com/jub0t">jub0t</a> and the Concat contributors.
 </p>
 
@@ -179,7 +179,7 @@ Build time dependencies:
 
 ## License
 
-[AGPL-3.0-or-later](LICENSE), as Concat's engine is (with its plugin exception, [LICENSE-EXCEPTIONS.md](LICENSE-EXCEPTIONS.md)). CapCraft for Android is not affiliated with, endorsed by or connected to ByteDance or CapCut.
+[AGPL-3.0-or-later](LICENSE), CapCraft for Android is not affiliated with, endorsed by or connected to ByteDance or CapCut.
 
 <br>
 

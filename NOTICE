@@ -19,8 +19,8 @@ Android app (src/crates/capcraft-android):
   assets/icons/LICENSE-lucide.txt. The app turns them into Compose path data at build time.
 - Material Symbols (src/crates/capcraft-android/assets/icons-material) — Apache-2.0. See
   assets/icons-material/LICENSE-material-symbols.txt.
-- The app icon's camera glyph (src/crates/capcraft-android/android/app/src/main/res/mipmap-*,
-  docs/images/capcraft-512.png) — from Google's Material icons, Apache-2.0, laid out with IconKitchen.
+- The app icon's camera (src/crates/capcraft-android/android/app/src/main/res/drawable/ic_launcher_*,
+  docs/images/capcraft-512.png) — after Google's Material icons, Apache-2.0, redrawn with its body hollow.
 - UniFFI (https://github.com/mozilla/uniffi-rs) — MPL-2.0: the uniffi crate in the library, and the
   generator of the Kotlin bindings (generated at build time, not committed).
 - JNA (https://github.com/java-native-access/jna) — Apache-2.0 (dual-licensed with LGPL-2.1; used
