@@ -1023,6 +1023,9 @@ private fun Page(title: String, onBack: () -> Unit, content: @Composable () -> U
     }
 }
 
+/** Where the app's source lives. */
+private const val SOURCE_URL = "https://github.com/artcraft-android/capcraft-android"
+
 /** What CapCraft is, who made the engine under it, and that it is nobody else's app. */
 @Composable
 private fun AboutScreen(onBack: () -> Unit) {
@@ -1044,6 +1047,17 @@ private fun AboutScreen(onBack: () -> Unit) {
             Text(
                 "Not affiliated with or endorsed by ByteDance or CapCut.",
                 style = ink(13f, color = Home.Muted).copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center),
+            )
+            Spacer(Modifier.height(28.dp))
+            // the source, as the licence asks of every copy handed on
+            Text("Source code", style = ink(13f, color = Home.Muted))
+            Spacer(Modifier.height(4.dp))
+            Text(
+                SOURCE_URL.removePrefix("https://"),
+                style = ink(14f, FontWeight.SemiBold).copy(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline),
+                modifier = Modifier.clickable {
+                    runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(SOURCE_URL))) }
+                }.padding(8.dp),
             )
         }
     }
