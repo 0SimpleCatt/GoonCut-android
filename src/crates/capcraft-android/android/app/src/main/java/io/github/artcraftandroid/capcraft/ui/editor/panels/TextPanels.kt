@@ -1074,7 +1074,17 @@ private fun KindsRow(
 }
 
 /** A ready-made look for a title: fill, outline, plate and shadow. */
-private class TextLook(val color: String, val stroke: String? = null, val plate: String? = null, val shadow: Boolean = false)
+private class TextLook(val color: String, val stroke: String? = null, val plate: String? = null, val shadow: Boolean = false) {
+    /** Whether the title's [style] is this look: its colour, outline, plate and shadow. */
+    fun worn(style: JSONObject): Boolean {
+        fun rgb(s: String?) = s.orEmpty().lowercase().take(7)
+        val outlined = style.optDouble("strokeWidth", 0.0) > 0.0
+        return rgb(style.optString("color", "#ffffff")) == rgb(color) &&
+            outlined == (stroke != null) && (!outlined || rgb(style.optString("strokeColor")) == rgb(stroke)) &&
+            rgb(style.optString("background")) == rgb(plate) &&
+            style.optBoolean("shadow", false) == shadow
+    }
+}
 
 private val LOOKS = listOf(
     TextLook("#ffffff", shadow = true),
@@ -1208,7 +1218,7 @@ private fun StylesTab(
             contentAlignment = Alignment.Center,
         ) { Glyph(LucideIcons.CircleX, Palette.TextSecondary, size = 20.dp) }
         LOOKS.forEach { look ->
-            LookTile(look) {
+            LookTile(look, look.worn(style)) {
                 change(null) {
                     put("color", look.color)
                     if (look.stroke != null) {
@@ -1559,9 +1569,11 @@ private fun ArcWord(word: String) {
 
 /** A look's tile: "Aa" drawn the way the look would draw the title. */
 @Composable
-private fun LookTile(look: TextLook, onClick: () -> Unit) {
+private fun LookTile(look: TextLook, selected: Boolean, onClick: () -> Unit) {
     Box(
-        Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)).background(Palette.Card).clickable(onClick = onClick),
+        Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)).background(Palette.Card)
+            .then(if (selected) Modifier.border(2.dp, Color.White, RoundedCornerShape(6.dp)) else Modifier)
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Box(

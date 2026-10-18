@@ -14,6 +14,7 @@ CapCraft is not affiliated with, endorsed by or connected to ByteDance or CapCut
 |---|---|---|
 | Lucide icons (Lucide Contributors, portions Cole Bemis / Feather) | ISC (`LICENSE-lucide.txt`) | the app's icons, as vector paths |
 | Material Symbols (Google) | Apache-2.0 (`LICENSE-material-symbols.txt`) | some of the app's icons, as vector paths |
+| Material icons' camera glyph (Google) | Apache-2.0 (`LICENSE-material-symbols.txt`) | the launcher icon, laid out with IconKitchen |
 | Kotlin standard library and coroutines (JetBrains) | Apache-2.0 | the app's code |
 | AndroidX, Jetpack Compose, Material 3 (Google) | Apache-2.0 | the app's interface |
 | JNA (Java Native Access) | Apache-2.0 | calling the engine from Kotlin |

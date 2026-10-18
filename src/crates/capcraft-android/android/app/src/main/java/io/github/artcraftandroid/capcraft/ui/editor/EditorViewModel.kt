@@ -178,6 +178,12 @@ class EditorViewModel(app: Application, val path: String) : AndroidViewModel(app
             val s = opened.getOrThrow()
             session = s
             timeline = withContext(Threads.commands) { s.view() }
+            // a photo project opened again exports a picture, as it did when it was made
+            if (java.io.File(path, PHOTO_MARK).exists()) {
+                photoTab = true
+                exportPhoto = true
+                exportGif = false
+            }
             when {
                 incoming.isEmpty() -> {}
                 then == "collage" -> startCollage(incoming)
@@ -226,6 +232,7 @@ class EditorViewModel(app: Application, val path: String) : AndroidViewModel(app
 
     /** Marks this project a photo project, for the Projects list's Photo shelf and its icon. */
     private fun markPhoto() {
+        photoTab = true
         runCatching { java.io.File(path, PHOTO_MARK).writeText("photo") }
     }
 
@@ -437,6 +444,7 @@ class EditorViewModel(app: Application, val path: String) : AndroidViewModel(app
             }
             // a still from a video: the export a picture of the frame under the playhead
             "framecapture" -> {
+                photoTab = true
                 exportPhoto = true
                 exportGif = false
                 message = "Stop on the frame you want, then Export"
@@ -548,6 +556,8 @@ class EditorViewModel(app: Application, val path: String) : AndroidViewModel(app
     var exportGif by mutableStateOf(false)
     /** The export a still of the frame under the playhead, as a picture, rather than a video or GIF. */
     var exportPhoto by mutableStateOf(false)
+    /** The export sheet offers Photo: in a photo project or one opened to capture a frame, as the reference's video projects offer only video and GIF. */
+    var photoTab by mutableStateOf(false)
     /** The sound clip the Sounds page's choice takes the place of, when it was opened by Replace. */
     var replacingSound by mutableStateOf<String?>(null)
     /** A GIF's short side in pixels. */

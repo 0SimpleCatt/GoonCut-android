@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -1000,16 +1001,26 @@ private fun rememberPreview(vm: EditorViewModel, id: String): android.graphics.B
     val revision = vm.timeline?.revision ?: 0L
     val at = vm.playhead / 500_000 * 500_000
     val t = vm.timeline
-    val (w, h) = if (t != null && t.width > t.height) 128 to (128 * t.height.toInt() / t.width.toInt()) else
-        (128 * (t?.width?.toInt() ?: 9) / (t?.height?.toInt() ?: 16)) to 128
-    val picture by produceState<android.graphics.Bitmap?>(TileCache.get("$id|$revision|$at"), id, revision, at) {
-        if (value != null || s == null) return@produceState
-        value = withContext(Threads.thumbnails) {
+    // the short side about as many pixels as a tile is wide, so the cropped picture stays sharp
+    val side = 216
+    val (w, h) = if (t != null && t.width > t.height) (side * t.width.toInt() / t.height.toInt()) to side else
+        side to (side * (t?.height?.toInt() ?: 16) / (t?.width?.toInt() ?: 9))
+    val key = "$id|$revision|$at"
+    // held per package: a grid slot handed to another package starts from that one's picture, never
+    // the last one's; an edit or a move of the playhead keeps the old picture until the new is drawn
+    val picture = remember(id) { mutableStateOf(TileCache.get(key)) }
+    LaunchedEffect(key) {
+        TileCache.get(key)?.let { picture.value = it; return@LaunchedEffect }
+        if (s == null) return@LaunchedEffect
+        withContext(Threads.thumbnails) {
             runCatching { s.frameWith(at, id, w.coerceAtLeast(2).toUInt(), h.coerceAtLeast(2).toUInt()) }.getOrNull()
                 ?.toBitmap()
-        }?.also { TileCache.put("$id|$revision|$at", it) }
+        }?.let {
+            TileCache.put(key, it)
+            picture.value = it
+        }
     }
-    return picture
+    return picture.value
 }
 
 @Composable
@@ -1024,9 +1035,11 @@ private fun PreviewPicture(b: android.graphics.Bitmap?, id: String) {
     }
 }
 
-/** Picker tiles, kept while the panel is reopened. */
+/** Picker tiles, kept while the panel is reopened: up to 32 MB of them. */
 private object TileCache {
-    private val cache = android.util.LruCache<String, android.graphics.Bitmap>(160)
+    private val cache = object : android.util.LruCache<String, android.graphics.Bitmap>(32 shl 20) {
+        override fun sizeOf(key: String, value: android.graphics.Bitmap) = value.allocationByteCount
+    }
     fun get(key: String): android.graphics.Bitmap? = cache.get(key)
     fun put(key: String, b: android.graphics.Bitmap) { cache.put(key, b) }
 }

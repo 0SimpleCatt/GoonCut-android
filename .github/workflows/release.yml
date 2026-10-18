@@ -83,7 +83,7 @@ jobs:
       # whatever happens to the Rust build after it
       - name: FFmpeg for Android (cached)
         id: ffmpeg
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: src/vendor/ffmpeg/aarch64-linux-android
           key: ffmpeg-aarch64-linux-android-${{ env.NDK_VERSION }}-${{ hashFiles('src/scripts/ffmpeg-mobile.sh') }}
@@ -92,7 +92,7 @@ jobs:
         run: src/scripts/ffmpeg-mobile.sh aarch64-linux-android
       - name: FFmpeg for Android (save)
         if: steps.ffmpeg.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: src/vendor/ffmpeg/aarch64-linux-android
           key: ${{ steps.ffmpeg.outputs.cache-primary-key }}

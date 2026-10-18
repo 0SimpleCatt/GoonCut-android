@@ -86,7 +86,7 @@ fun ExportSheet(vm: EditorViewModel, onExport: () -> Unit) {
         ) {
             Row(Modifier.fillMaxWidth().height(50.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) {
-                    Tabs(listOf("Video", "GIF", "Photo"), if (vm.exportPhoto) 2 else if (vm.exportGif) 1 else 0) {
+                    Tabs(if (vm.photoTab) listOf("Video", "GIF", "Photo") else listOf("Video", "GIF"), if (vm.exportPhoto) 2 else if (vm.exportGif) 1 else 0) {
                         vm.exportGif = it == 1
                         vm.exportPhoto = it == 2
                     }

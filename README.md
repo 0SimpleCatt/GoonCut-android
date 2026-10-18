@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/capcraft-1024.png" alt="CapCraft's app icon" width="128">
+  <img src="docs/images/capcraft-512.png" alt="CapCraft's app icon" width="128">
 </p>
 
 <h1 align="center">CapCraft for Android</h1>
@@ -63,7 +63,7 @@
 <table align="center">
 <tr>
 <td align="center"><img src="docs/images/filters.png" alt="The Filters panel on the Cinematic shelf: None, Teal &amp; Orange, Moody (chosen) and Cool Blue, each a preview of the clip itself, and an intensity slider with Apply to all" width="250"></td>
-<td align="center"><img src="docs/images/effects.png" alt="The Video effects panel: the shelves Motion, Light, Distort, Retro, Stylize, Split and Blur, and the effects Shake, Flash, Pulse, Glitch, VHS, Old Film and Rainbow (chosen), each previewed on the clip" width="250"></td>
+<td align="center"><img src="docs/images/effects.png" alt="The Video effects panel: the shelves Motion, Light, Distort, Retro, Stylize, Split and Blur, and the effects Shake, Flash, Pulse, Glitch, VHS, Old Film and Rainbow, each previewed on the frame" width="250"></td>
 </tr>
 <tr>
 <td align="center"><sub>80+ filters, previewed on the clip</sub></td>
