@@ -1,0 +1,12 @@
+*~
+/target
+/target-*/
+/dist
+/src/target
+/src/vendor
+.DS_Store
+.claude/
+local.properties
+.gradle/
+.kotlin/
+build/
