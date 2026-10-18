@@ -13,6 +13,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -92,16 +94,78 @@ import java.util.Locale
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** The home screens are light, as the reference's are; the editor stays dark. */
-private object Home {
-    val Background = Color.White
-    val Ink = Color(0xFF161823)
-    val Muted = Color(0xFF8A8B91)
-    val Hairline = Color(0xFFECECEE)
-    val Tile = Color(0xFFF1F1F3)
-    val Card = Color(0xC7FFFFFF)
-}
+/**
+ * The home screens' colours: light, as the reference's are, or dark while the phone is in dark mode.
+ * The editor is dark either way.
+ */
+private class HomeColors(
+    val dark: Boolean,
+    val Background: Color,
+    val Ink: Color,
+    /** A glyph on an [Ink] square. */
+    val OnInk: Color,
+    val Muted: Color,
+    val Hairline: Color,
+    val Tile: Color,
+    /** The create cards over the picture. */
+    val Card: Color,
+    /** Sheets and dialogs over the tabs. */
+    val Sheet: Color,
+    /** Text fields and Cancel buttons. */
+    val Field: Color,
+    /** The handle at the top of a sheet. */
+    val Grabber: Color,
+    /** Tick rings, the clear button and small rules. */
+    val Ring: Color,
+    /** The card at the end of the recent strip. */
+    val More: Color,
+    /** The tools pages' wash, top to bottom, and their round buttons. */
+    val Wash: List<Color>,
+    val Round: Color,
+)
 
+private val LightHome = HomeColors(
+    dark = false,
+    Background = Color.White,
+    Ink = Color(0xFF161823),
+    OnInk = Color.White,
+    Muted = Color(0xFF8A8B91),
+    Hairline = Color(0xFFECECEE),
+    Tile = Color(0xFFF1F1F3),
+    Card = Color(0xC7FFFFFF),
+    Sheet = Color.White,
+    Field = Color(0xFFF1F2F4),
+    Grabber = Color(0xFFDADADD),
+    Ring = Color(0xFFC4C4C8),
+    More = Color(0xFFC6D1DB),
+    Wash = listOf(Color(0xFFA6D3F2), Color(0xFFDDE3E8)),
+    Round = Color(0xFFEFF2F5),
+)
+
+/** The same pages in the editor's blacks and greys. */
+private val DarkHome = HomeColors(
+    dark = true,
+    Background = Palette.Black,
+    Ink = Palette.Text,
+    OnInk = Palette.Black,
+    Muted = Color(0xFF9A9BA1),
+    Hairline = Palette.Divider,
+    Tile = Palette.Card,
+    Card = Color(0xC71A1A1A),
+    Sheet = Palette.Panel,
+    Field = Palette.CardPressed,
+    Grabber = Palette.DockBack,
+    Ring = Color(0xFF5C5C60),
+    More = Palette.CardPressed,
+    Wash = listOf(Color(0xFF15293A), Color(0xFF0B0B0D)),
+    Round = Color(0xFF262A30),
+)
+
+private val Home: HomeColors
+    @Composable @ReadOnlyComposable get() = if (isSystemInDarkTheme()) DarkHome else LightHome
+
+@Composable
+@ReadOnlyComposable
 private fun ink(size: Float, weight: FontWeight = FontWeight.Normal, color: Color = Home.Ink) =
     TextStyle(color = color, fontSize = size.sp, fontWeight = weight)
 
@@ -188,18 +252,23 @@ fun HomeScreen(
         trash = withContext(Threads.commands) { runCatching { listTrash() }.getOrDefault(emptyList()) }
     }
 
-    // Light bars over the light pages, light icons over the picture at the top of Edit; dark again
-    // for the editor.
+    // Light bars over the light pages, light icons over the picture at the top of Edit and over the
+    // dark pages; dark again for the editor.
     val activity = LocalContext.current as? ComponentActivity
     val overPicture = tab == 0 && !licences && !about
-    DisposableEffect(activity, overPicture) {
+    val dark = Home.dark
+    DisposableEffect(activity, overPicture, dark) {
         activity?.enableEdgeToEdge(
-            statusBarStyle = if (overPicture) {
+            statusBarStyle = if (overPicture || dark) {
                 SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
             } else {
                 SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
             },
-            navigationBarStyle = SystemBarStyle.light(android.graphics.Color.WHITE, android.graphics.Color.WHITE),
+            navigationBarStyle = if (dark) {
+                SystemBarStyle.dark(android.graphics.Color.BLACK)
+            } else {
+                SystemBarStyle.light(android.graphics.Color.WHITE, android.graphics.Color.WHITE)
+            },
         )
         onDispose {
             activity?.enableEdgeToEdge(
@@ -496,10 +565,10 @@ private fun EditTab(
                 Spacer(Modifier.height(16.dp))
                 Row(Modifier.fillMaxWidth().height(112.dp).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CreateCard("New video", Modifier.weight(1.7f), onNewVideo) {
-                        Glyph(LucideIcons.Plus, Color.White, size = 18.dp)
+                        Glyph(LucideIcons.Plus, Home.OnInk, size = 18.dp)
                     }
                     CreateCard("Edit photo", Modifier.weight(1f), onCaptions) {
-                        Glyph(LucideIcons.Image, Color.White, size = 16.dp)
+                        Glyph(LucideIcons.Image, Home.OnInk, size = 16.dp)
                     }
                 }
                 Spacer(Modifier.height(16.dp))
@@ -517,7 +586,7 @@ private fun EditTab(
                 }
                 Box(
                     Modifier.align(Alignment.CenterEnd).padding(end = 16.dp).size(46.dp, 70.dp)
-                        .clip(RoundedCornerShape(6.dp)).background(Color(0xFFC6D1DB)).clickable(onClick = onAllProjects),
+                        .clip(RoundedCornerShape(6.dp)).background(Home.More).clickable(onClick = onAllProjects),
                     contentAlignment = Alignment.Center,
                 ) { Glyph(LucideIcons.ChevronRight, Color.White, size = 24.dp, description = "All projects") }
             }
@@ -551,7 +620,7 @@ private fun ToolsSheet(title: String, tools: List<Triple<String, String, String>
     androidx.activity.compose.BackHandler(onBack = onClose)
     Box(
         Modifier.fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFFA6D3F2), Color(0xFFDDE3E8))))
+            .background(Brush.verticalGradient(Home.Wash))
             .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {},
     ) {
         Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().navigationBarsPadding().padding(start = 24.dp, end = 24.dp, bottom = 24.dp)) {
@@ -562,7 +631,7 @@ private fun ToolsSheet(title: String, tools: List<Triple<String, String, String>
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onTool(id) }.padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(Modifier.size(52.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xFFEFF2F5)), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(52.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Home.Round), contentAlignment = Alignment.Center) {
                         Glyph(
                             when (id) {
                                 "record" -> LucideIcons.Mic
@@ -587,7 +656,7 @@ private fun ToolsSheet(title: String, tools: List<Triple<String, String, String>
             }
             Spacer(Modifier.height(4.dp))
             Box(
-                Modifier.size(52.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xFFEFF2F5)).clickable(onClick = onClose),
+                Modifier.size(52.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Home.Round).clickable(onClick = onClose),
                 contentAlignment = Alignment.Center,
             ) { Glyph(LucideIcons.X, Home.Ink, size = 20.dp, description = "Close") }
         }
@@ -596,10 +665,11 @@ private fun ToolsSheet(title: String, tools: List<Triple<String, String, String>
 
 /**
  * The picture at the top of Edit, our own: a cyan-to-violet wash with a few tilted frames, as of
- * clips on a timeline, fading to the page's white at the bottom.
+ * clips on a timeline, fading to the page's colour at the bottom.
  */
 @Composable
 private fun HeroArt(modifier: Modifier) {
+    val page = Home.Background
     Canvas(modifier) {
         val w = size.width
         val h = size.height
@@ -618,8 +688,8 @@ private fun HeroArt(modifier: Modifier) {
                 }
             }
         }
-        // the page's white coming up under the cards
-        drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.White), startY = h * 0.68f, endY = h))
+        // the page coming up under the cards
+        drawRect(Brush.verticalGradient(listOf(page.copy(alpha = 0f), page), startY = h * 0.68f, endY = h))
     }
 }
 
@@ -856,7 +926,7 @@ private fun ProjectRow(p: ProjectSummary, ticked: Boolean?, onOpen: () -> Unit, 
                 Spacer(Modifier.width(4.dp))
                 Text(size(p.sizeBytes), style = ink(13f, color = Home.Muted))
                 if (!photo) {
-                    Box(Modifier.padding(horizontal = 6.dp).size(1.dp, 10.dp).background(Color(0xFFCFCFD3)))
+                    Box(Modifier.padding(horizontal = 6.dp).size(1.dp, 10.dp).background(Home.Ring))
                     Text(clock(p.durationUs), style = ink(13f, color = Home.Muted))
                 }
             }
@@ -869,7 +939,7 @@ private fun ProjectRow(p: ProjectSummary, ticked: Boolean?, onOpen: () -> Unit, 
             Box(
                 Modifier.size(24.dp).clip(RoundedCornerShape(12.dp))
                     .background(if (ticked) Palette.Accent else Color.Transparent)
-                    .then(if (ticked) Modifier else Modifier.border(1.5.dp, Color(0xFFC4C4C8), RoundedCornerShape(12.dp))),
+                    .then(if (ticked) Modifier else Modifier.border(1.5.dp, Home.Ring, RoundedCornerShape(12.dp))),
                 contentAlignment = Alignment.Center,
             ) {
                 if (ticked) Glyph(LucideIcons.Check, Color.White, size = 16.dp)
@@ -1008,7 +1078,7 @@ private fun SettingRow(label: String, value: String?, onClick: (() -> Unit)?) {
     }
 }
 
-/** A light page over the tabs, with a back chevron and a title. */
+/** A page over the tabs, with a back chevron and a title. */
 @Composable
 private fun Page(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
     androidx.activity.compose.BackHandler(onBack = onBack)
@@ -1158,10 +1228,10 @@ private fun TrashSheet(p: ProjectSummary, onDismiss: () -> Unit, onRestore: () -
     val cover = rememberCover(p)
     Scrim(onDismiss, Alignment.BottomCenter) {
         Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).background(Home.Background)
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).background(Home.Sheet)
                 .navigationBarsPadding().padding(bottom = 12.dp),
         ) {
-            Box(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp).size(36.dp, 4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFFDADADD)))
+            Box(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp).size(36.dp, 4.dp).clip(RoundedCornerShape(2.dp)).background(Home.Grabber))
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(46.dp).clip(RoundedCornerShape(6.dp)).background(Home.Tile)) {
                     cover?.let { Image(it.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
@@ -1186,10 +1256,10 @@ private fun ProjectSheet(p: ProjectSummary, onDismiss: () -> Unit, onRename: () 
     val cover = rememberCover(p)
     Scrim(onDismiss, Alignment.BottomCenter) {
         Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).background(Home.Background)
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).background(Home.Sheet)
                 .navigationBarsPadding().padding(bottom = 12.dp),
         ) {
-            Box(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp).size(36.dp, 4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFFDADADD)))
+            Box(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp).size(36.dp, 4.dp).clip(RoundedCornerShape(2.dp)).background(Home.Grabber))
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(46.dp).clip(RoundedCornerShape(6.dp)).background(Home.Tile)) {
                     cover?.let { Image(it.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
@@ -1226,7 +1296,7 @@ private fun RenameSheet(current: String, onDismiss: () -> Unit, onDone: (String)
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     Scrim(onDismiss, Alignment.BottomCenter) {
         Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).background(Home.Background)
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).background(Home.Sheet)
                 .navigationBarsPadding().imePadding().padding(horizontal = 16.dp).padding(bottom = 12.dp),
         ) {
             Box(Modifier.fillMaxWidth().height(50.dp), contentAlignment = Alignment.Center) {
@@ -1236,7 +1306,7 @@ private fun RenameSheet(current: String, onDismiss: () -> Unit, onDone: (String)
                 }
             }
             Row(
-                Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFF1F2F4)).padding(start = 14.dp, end = 6.dp),
+                Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(6.dp)).background(Home.Field).padding(start = 14.dp, end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 BasicTextField(
@@ -1249,7 +1319,7 @@ private fun RenameSheet(current: String, onDismiss: () -> Unit, onDone: (String)
                 )
                 if (text.text.isNotEmpty()) {
                     Box(Modifier.size(34.dp).clickable { text = androidx.compose.ui.text.input.TextFieldValue("") }, contentAlignment = Alignment.Center) {
-                        Box(Modifier.size(18.dp).clip(RoundedCornerShape(9.dp)).background(Color(0xFFC4C5CA)), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(18.dp).clip(RoundedCornerShape(9.dp)).background(Home.Ring), contentAlignment = Alignment.Center) {
                             Glyph(LucideIcons.X, Color.White, size = 12.dp)
                         }
                     }
@@ -1267,19 +1337,19 @@ private fun RenameSheet(current: String, onDismiss: () -> Unit, onDone: (String)
     }
 }
 
-/** A question in a white card: Cancel, or the action. */
+/** A question in a card: Cancel, or the action. */
 @Composable
 private fun HomeConfirm(text: String, confirm: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
     Scrim(onDismiss, Alignment.Center) {
         Column(
-            Modifier.padding(horizontal = 40.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Home.Background).padding(20.dp),
+            Modifier.padding(horizontal = 40.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Home.Sheet).padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(text, style = ink(16f).copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center))
             Spacer(Modifier.height(20.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(
-                    Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFF1F2F4)).clickable(onClick = onDismiss),
+                    Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(6.dp)).background(Home.Field).clickable(onClick = onDismiss),
                     contentAlignment = Alignment.Center,
                 ) { Text("Cancel", style = ink(15f, FontWeight.Medium)) }
                 Box(
