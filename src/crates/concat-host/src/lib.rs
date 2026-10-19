@@ -37,6 +37,7 @@ pub mod projects;
 pub mod proxy;
 pub mod record;
 pub mod reverse;
+pub mod scrub;
 pub mod session;
 pub mod templates;
 pub mod titles;

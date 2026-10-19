@@ -1453,7 +1453,9 @@ fn typed_lines_become_captions_one_after_another() {
 
 /// The mean brightness of a frame of `session` at `at_us`, small.
 fn brightness(session: &MobileSession, at_us: i64) -> f64 {
-    let picture = session.frame(at_us, 64, 36, false).expect("a frame");
+    let picture = session
+        .frame(at_us, 64, 36, crate::session::Motion::Still)
+        .expect("a frame");
     let sum: u64 = picture
         .rgba
         .chunks(4)

@@ -3,6 +3,7 @@ package io.github.artcraftandroid.capcraft.ui.editor
 import android.app.Application
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -55,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import io.github.artcraftandroid.capcraft.core.Motion
 import io.github.artcraftandroid.capcraft.engine.Media
 import io.github.artcraftandroid.capcraft.engine.Threads
 import io.github.artcraftandroid.capcraft.engine.clock
@@ -67,7 +69,8 @@ import io.github.artcraftandroid.capcraft.ui.Type
 import io.github.artcraftandroid.capcraft.ui.common.Toast
 import io.github.artcraftandroid.capcraft.ui.editor.panels.PanelHost
 import io.github.artcraftandroid.capcraft.ui.export.ExportScreen
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -301,6 +304,31 @@ fun Preview(vm: EditorViewModel, modifier: Modifier) {
     }
 }
 
+/** How long the playhead rests after a scrub before the monitor shows the exact frame, milliseconds. */
+private const val SCRUB_REST_MS = 150L
+
+/** Counts the frames a drag of the playhead gets and how long each took, logged when it rests, as playback logs its rate. */
+private class ScrubMeter {
+    private var frames = 0
+    private var busy = 0L
+    private var first = 0L
+    private var last = 0L
+    fun add(started: Long) {
+        val now = System.nanoTime()
+        if (frames == 0) first = started
+        frames++
+        busy += now - started
+        last = now
+    }
+    fun rest(width: Int, height: Int) {
+        if (frames == 0) return
+        val span = (last - first).coerceAtLeast(1L)
+        android.util.Log.d("CapCraft", "scrub %d frames, %.1f fps, %.1f ms a frame at %dx%d".format(frames, frames * 1e9 / span, busy / 1e6 / frames, width, height))
+        frames = 0
+        busy = 0L
+    }
+}
+
 /** Two bitmaps the engine draws into in turn, so the one on screen is never written mid-frame. */
 private class FrameBuffers {
     private val bitmaps = arrayOfNulls<Bitmap>(2)
@@ -316,6 +344,7 @@ private class FrameBuffers {
 private fun rememberFrames(vm: EditorViewModel, width: Int, height: Int): ImageBitmap? {
     var image by remember { mutableStateOf<ImageBitmap?>(null) }
     val buffers = remember { FrameBuffers() }
+    val meter = remember { ScrubMeter() }
     val session = vm.session
     val revision = vm.timeline?.revision
     LaunchedEffect(session, revision, width, height, vm.playing) {
@@ -333,24 +362,43 @@ private fun rememberFrames(vm: EditorViewModel, width: Int, height: Int): ImageB
                     since = now
                 }
                 val pic = withContext(Threads.preview) {
-                    runCatching { s.frame(at, width.toUInt(), height.toUInt(), true) }.getOrNull()
+                    runCatching { s.frame(at, width.toUInt(), height.toUInt(), Motion.PLAYING) }.getOrNull()
                 } ?: break
                 val b = pic.intoBitmap(buffers.take()) ?: break
                 buffers.put(b)
                 image = b.asImageBitmap()
             }
         } else {
-            snapshotFlow { vm.playhead }.conflate().collectLatest { playhead ->
-                // the last frame, not the black just past it, at the very end
-                val end = vm.timeline?.durationUs ?: 0L
-                val at = if (end > 0 && playhead >= end) (end - 34_000).coerceAtLeast(0) else playhead
+            suspend fun show(at: Long, motion: Motion) {
+                val started = System.nanoTime()
                 val pic = withContext(Threads.preview) {
-                    runCatching { s.frame(at, width.toUInt(), height.toUInt(), false) }.getOrNull()
-                } ?: return@collectLatest
-                val b = pic.intoBitmap(buffers.take()) ?: return@collectLatest
+                    runCatching { s.frame(at, width.toUInt(), height.toUInt(), motion) }.getOrNull()
+                } ?: return
+                if (motion == Motion.SCRUBBING) meter.add(started)
+                val b = pic.intoBitmap(buffers.take()) ?: return
                 buffers.put(b)
                 vm.lastFrame = b
                 image = b.asImageBitmap()
+            }
+            var rest: Job? = null
+            // every frame made is shown, and the next is made for wherever the playhead is by then:
+            // a drag moves it faster than frames are made, and waiting for it to hold still showed few
+            snapshotFlow { vm.playhead }.conflate().collect { playhead ->
+                rest?.cancel()
+                // the last frame, not the black just past it, at the very end
+                val end = vm.timeline?.durationUs ?: 0L
+                val at = if (end > 0 && playhead >= end) (end - 34_000).coerceAtLeast(0) else playhead
+                if (SystemClock.uptimeMillis() - vm.scrubbedAt < SCRUB_REST_MS) {
+                    // under a finger, the light scrub copy; once the playhead rests, the exact frame
+                    show(at, Motion.SCRUBBING)
+                    rest = launch {
+                        delay(SCRUB_REST_MS)
+                        meter.rest(width, height)
+                        show(at, Motion.STILL)
+                    }
+                } else {
+                    show(at, Motion.STILL)
+                }
             }
         }
     }
@@ -519,7 +567,7 @@ private suspend fun saveCover(vm: EditorViewModel) {
             val w = 240
             val h = (w * t.height.toFloat() / t.width.toFloat()).roundToInt() / 2 * 2
             val at = vm.coverAt.coerceIn(0, (t.durationUs - 1).coerceAtLeast(0))
-            val pic = s.frame(at, w.toUInt(), h.coerceAtLeast(2).toUInt(), false)
+            val pic = s.frame(at, w.toUInt(), h.coerceAtLeast(2).toUInt(), Motion.STILL)
             pic.intoBitmap(null)?.let { Media.saveCover(vm.path, it) }
         }
     }

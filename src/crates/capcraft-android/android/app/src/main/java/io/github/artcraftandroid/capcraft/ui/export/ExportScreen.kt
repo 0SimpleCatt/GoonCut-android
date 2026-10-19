@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import io.github.artcraftandroid.capcraft.core.ExportListener
 import io.github.artcraftandroid.capcraft.core.ExportSettings
 import io.github.artcraftandroid.capcraft.core.GifSettings
+import io.github.artcraftandroid.capcraft.core.Motion
 import io.github.artcraftandroid.capcraft.core.cancelExport
 import io.github.artcraftandroid.capcraft.core.exportPath
 import io.github.artcraftandroid.capcraft.core.exportSize
@@ -122,7 +123,7 @@ fun ExportScreen(vm: EditorViewModel, onClose: () -> Unit, onHome: () -> Unit) {
             val size = exportSize(t.width, t.height, exportResolutionOf(vm).toUInt())
             val at = vm.playhead.coerceIn(0, (t.durationUs - 1).coerceAtLeast(0))
             val picture = withContext(Threads.preview) {
-                runCatching { s.frame(at, size[0], size[1], false).intoBitmap(null) }.getOrNull()
+                runCatching { s.frame(at, size[0], size[1], Motion.STILL).intoBitmap(null) }.getOrNull()
             }
             cover = picture
             val uri = picture?.let { withContext(Dispatchers.IO) { publishPhoto(context, it) } }
@@ -133,7 +134,7 @@ fun ExportScreen(vm: EditorViewModel, onClose: () -> Unit, onHome: () -> Unit) {
             runCatching {
                 val w = 360
                 val h = (w * t.height.toFloat() / t.width.toFloat()).roundToInt() / 2 * 2
-                s.frame(0, w.toUInt(), h.coerceAtLeast(2).toUInt(), false).intoBitmap(null)
+                s.frame(0, w.toUInt(), h.coerceAtLeast(2).toUInt(), Motion.STILL).intoBitmap(null)
             }.getOrNull()
         }
         val short = min(t.width.toInt(), t.height.toInt())

@@ -1853,24 +1853,29 @@ pub fn preview_sources(
     pool: &concat_media::ReaderPool,
     request: &PreviewFrameRequest,
 ) -> Result<PreviewSources, String> {
-    preview_sources_of(pool, &preview_timeline(request), request.time, false)
+    preview_sources_of(
+        pool,
+        &preview_timeline(request),
+        request.time,
+        concat_media::Reading::Original,
+    )
 }
 
 /// The pool's request for one planned layer: the source frame at the
 /// level that covers the output, so the cached picture is the file's and
-/// no knob invalidates it. `proxy` reads the file's stand-in where it has
-/// one: for a picture that is moving, never for the paused monitor.
+/// no knob invalidates it. `reading` says which copy of the file: a
+/// stand-in for a picture that is moving, never for the paused monitor.
 fn frame_request(
     plan: &PreviewPlan,
     layer: &concat_render::PlannedLayer,
     (width, height): (u32, u32),
     still: bool,
-    proxy: bool,
+    reading: concat_media::Reading,
 ) -> concat_media::FrameRequest {
     concat_media::FrameRequest::new(&layer.media, layer.source_time, width, height)
         .covering(plan.width.max(width), plan.height.max(height))
         .as_still(still)
-        .from_proxy(proxy)
+        .reading(reading)
         .in_range(plan.built.ranges.get(&layer.clip).copied())
         // The compositor fits the picture into its place, so an untreated
         // frame is drawn at the level it was decoded at - deep, for an HDR
@@ -1879,13 +1884,13 @@ fn frame_request(
         .deep_when_untreated(!plan.built.cutouts.contains_key(&layer.clip))
 }
 
-/// [`preview_sources`] for one instant of a plan already built. With
-/// `proxy`, a file with a stand-in is read from it.
+/// [`preview_sources`] for one instant of a plan already built, each file
+/// read from the copy `reading` names where it has one.
 pub fn preview_sources_of(
     pool: &concat_media::ReaderPool,
     plan: &PreviewPlan,
     seconds: f64,
-    proxy: bool,
+    reading: concat_media::Reading,
 ) -> Result<PreviewSources, String> {
     let rate = plan.rate;
     let BuiltTimeline {
@@ -1921,7 +1926,7 @@ pub fn preview_sources_of(
             layer,
             (decode_width, decode_height),
             stills.contains(&layer.clip),
-            proxy,
+            reading,
         )) {
             Ok(frame) => {
                 let highlighted = highlight == Some(layer.clip);
@@ -2092,7 +2097,7 @@ pub fn preview_prefetch_of(
     seconds: f64,
     frames: u32,
 ) {
-    for moment in preview_moments(plan, seconds, frames, false) {
+    for moment in preview_moments(plan, seconds, frames, concat_media::Reading::Original) {
         for request in &moment.frames {
             let _ = pool.frame(request);
         }
@@ -2107,7 +2112,7 @@ pub fn preview_moments(
     plan: &PreviewPlan,
     seconds: f64,
     frames: u32,
-    proxy: bool,
+    reading: concat_media::Reading,
 ) -> Vec<concat_media::Moment> {
     let rate = plan.rate;
     let BuiltTimeline {
@@ -2131,7 +2136,7 @@ pub fn preview_moments(
                             .get(&layer.clip)
                             .copied()
                             .unwrap_or((plan.width, plan.height));
-                        frame_request(plan, layer, size, stills.contains(&layer.clip), proxy)
+                        frame_request(plan, layer, size, stills.contains(&layer.clip), reading)
                     })
                     .collect(),
             }

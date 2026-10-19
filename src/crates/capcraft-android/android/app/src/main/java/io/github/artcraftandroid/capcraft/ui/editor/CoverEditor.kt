@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import io.github.artcraftandroid.capcraft.core.Motion
 import io.github.artcraftandroid.capcraft.engine.Media
 import io.github.artcraftandroid.capcraft.engine.Threads
 import io.github.artcraftandroid.capcraft.engine.clock
@@ -95,7 +96,7 @@ fun CoverEditor(vm: EditorViewModel, onClose: () -> Unit) {
         val w = 720
         val h = (w * t.height.toFloat() / t.width.toFloat()).roundToInt() / 2 * 2
         picture = withContext(Threads.preview) {
-            runCatching { s.frame(at, w.toUInt(), h.coerceAtLeast(2).toUInt(), false).toBitmap()?.asImageBitmap() }.getOrNull()
+            runCatching { s.frame(at, w.toUInt(), h.coerceAtLeast(2).toUInt(), Motion.STILL).toBitmap()?.asImageBitmap() }.getOrNull()
         } ?: picture
     }
 
@@ -126,7 +127,7 @@ fun CoverEditor(vm: EditorViewModel, onClose: () -> Unit) {
                                 runCatching {
                                     val w = 480
                                     val h = (w * t.height.toFloat() / t.width.toFloat()).roundToInt() / 2 * 2
-                                    s.frame(at, w.toUInt(), h.coerceAtLeast(2).toUInt(), false).toBitmap()?.let { Media.saveCover(vm.path, it) }
+                                    s.frame(at, w.toUInt(), h.coerceAtLeast(2).toUInt(), Motion.STILL).toBitmap()?.let { Media.saveCover(vm.path, it) }
                                 }
                             }
                             vm.coverAt = at

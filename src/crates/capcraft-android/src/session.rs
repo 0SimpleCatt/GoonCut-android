@@ -35,6 +35,20 @@ const STICKER_SCALE: f64 = 0.35;
 /// engine's own default.
 const STILL_SECONDS: f64 = 5.0;
 
+/// What the monitor's picture is doing, which says which copy of each file
+/// a frame is read from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum Motion {
+    /// At rest: the files themselves, the exact frame.
+    Still,
+    /// Playing, or written out frame after frame: the files themselves,
+    /// and the frames ahead decoded early.
+    Playing,
+    /// The playhead under a finger: each file's scrub copy where it has
+    /// one, nothing decoded ahead.
+    Scrubbing,
+}
+
 /// The open timeline, as the editor draws it.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct TimelineView {
@@ -117,6 +131,8 @@ pub(crate) struct State {
     flat: Option<(u64, u32, u32, Arc<Vec<ExportClip>>)>,
     /// What each undo step is called, for the notice an undo shows.
     names: crate::history::Names,
+    /// The videos whose scrub copies have been seen to.
+    scrubbed: std::collections::HashSet<String>,
 }
 
 impl MobileSession {
@@ -190,6 +206,7 @@ impl MobileSession {
     pub(crate) fn changed(state: &mut State, created: Option<String>) -> TimelineView {
         state.revision += 1;
         crate::playback::sync(&state.session);
+        crate::scrubs::see_to(&state.session, &mut state.scrubbed);
         let mut view = Self::view_of(state);
         view.created_id = created.unwrap_or_default();
         view
@@ -374,13 +391,16 @@ impl MobileSession {
             });
         let session = Session::open_info(&info)?;
         let names = crate::history::Names::new(&session);
-        let state = State {
+        let mut state = State {
             session,
             revision: 1,
             flat: None,
             names,
+            scrubbed: std::collections::HashSet::new(),
         };
         crate::playback::sync(&state.session);
+        crate::scrubs::sweep(&state.session);
+        crate::scrubs::see_to(&state.session, &mut state.scrubbed);
         Ok(Arc::new(MobileSession {
             state: Mutex::new(state),
             gestures: AtomicU64::new(0),
@@ -486,7 +506,9 @@ impl MobileSession {
             None => {
                 state.session.apply(Command::AddMedia { item })?;
                 state.revision += 1;
-                existing(&state).ok_or_else(|| "the file did not land in the bin".to_owned())?
+                let state = &mut *state;
+                crate::scrubs::see_to(&state.session, &mut state.scrubbed);
+                existing(state).ok_or_else(|| "the file did not land in the bin".to_owned())?
             }
         };
         let media = state
@@ -1062,14 +1084,14 @@ impl MobileSession {
     }
 
     /// The composited frame at `time_us`, `width` by `height` (the canvas's
-    /// shape at the size the screen shows it). `moving` while playing, so
-    /// the decoders read ahead.
+    /// shape at the size the screen shows it). `motion` says which copy of
+    /// each file it is read from and what is decoded ahead: see [`Motion`].
     pub fn frame(
         &self,
         time_us: i64,
         width: u32,
         height: u32,
-        moving: bool,
+        motion: Motion,
     ) -> Result<Picture, MobileError> {
         let context = context()?;
         let (width, height) = (even(width), even(height));
@@ -1102,21 +1124,26 @@ impl MobileSession {
             time: seconds(time_us).max(0.0),
             width,
             height,
-            moving,
+            moving: motion == Motion::Playing,
             proxy: false,
+            scrub: motion == Motion::Scrubbing,
             color_space,
         };
         let rgba = context
             .monitor
             .frame(Arc::clone(&clips), &settings, spec)
             .map_err(MobileError::Failed)?;
-        let ahead = if moving {
-            concat_media::prefetch::AHEAD
-        } else {
-            2
+        // A drag goes either way, and its next instant is a cheap read of
+        // the scrub copy: nothing is decoded ahead of it.
+        let ahead = match motion {
+            Motion::Playing => concat_media::prefetch::AHEAD,
+            Motion::Still => 2,
+            Motion::Scrubbing => 0,
         };
-        let monitor = context.monitor.clone();
-        std::thread::spawn(move || monitor.prefetch(clips, &settings, spec, ahead));
+        if ahead > 0 {
+            let monitor = context.monitor.clone();
+            std::thread::spawn(move || monitor.prefetch(clips, &settings, spec, ahead));
+        }
         Ok(Picture {
             width,
             height,
@@ -1313,6 +1340,7 @@ impl MobileSession {
             height,
             moving: false,
             proxy: false,
+            scrub: false,
             color_space,
         };
         let rgba = context

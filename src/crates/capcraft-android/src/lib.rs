@@ -51,6 +51,7 @@ pub mod motionblur;
 pub mod pauses;
 pub mod playback;
 pub mod reframe;
+mod scrubs;
 pub mod session;
 pub mod slowmo;
 pub mod speech;

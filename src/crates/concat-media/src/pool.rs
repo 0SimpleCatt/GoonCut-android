@@ -78,6 +78,10 @@ pub struct FrameRequest {
     /// Read the file's proxy where it has one; see
     /// [`ReaderPool::adopt_proxy`].
     pub proxy: bool,
+    /// Read the file's scrub copy where it has one, else its proxy, else
+    /// the file: for a playhead being dragged. See
+    /// [`ReaderPool::adopt_scrub`].
+    pub scrub: bool,
     /// The levels the file is read as, over its own tag; `None` reads the
     /// tag. See [`DecodeOptions::color_range`]. Never applied to a proxy:
     /// a proxy was written from the corrected picture and tagged true.
@@ -109,6 +113,7 @@ impl FrameRequest {
             pre: None,
             chain: None,
             proxy: false,
+            scrub: false,
             range: None,
             any_size: false,
             deep: false,
@@ -169,6 +174,31 @@ impl FrameRequest {
         self.proxy = proxy;
         self
     }
+
+    /// Reads the scrub copy where there is one. See
+    /// [`FrameRequest::scrub`].
+    pub fn for_scrub(mut self, scrub: bool) -> Self {
+        self.scrub = scrub;
+        self
+    }
+
+    /// Reads the copy `reading` names where the file has one.
+    pub fn reading(self, reading: Reading) -> Self {
+        self.from_proxy(reading == Reading::Proxy)
+            .for_scrub(reading == Reading::Scrub)
+    }
+}
+
+/// Which copy of a file a frame is read from.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+pub enum Reading {
+    /// The file itself: the paused monitor and the export.
+    #[default]
+    Original,
+    /// Its proxy where it has one: a picture that is playing.
+    Proxy,
+    /// Its scrub copy, else its proxy: a playhead being dragged.
+    Scrub,
 }
 
 /// A source frame's identity: the file, the level it was decoded at, the
@@ -526,6 +556,9 @@ pub struct ReaderPool {
     /// The stand-in for each file that has one; see
     /// [`ReaderPool::adopt_proxy`].
     proxies: Mutex<HashMap<PathBuf, PathBuf>>,
+    /// The scrub copy for each file that has one; see
+    /// [`ReaderPool::adopt_scrub`].
+    scrubs: Mutex<HashMap<PathBuf, PathBuf>>,
     counters: Counters,
 }
 
@@ -560,6 +593,7 @@ impl ReaderPool {
             facts: Mutex::new(HashMap::new()),
             memory: Mutex::new((HashMap::new(), std::collections::VecDeque::new())),
             proxies: Mutex::new(HashMap::new()),
+            scrubs: Mutex::new(HashMap::new()),
             counters: Counters::default(),
         }
     }
@@ -670,6 +704,21 @@ impl ReaderPool {
         self.proxies.lock().ok()?.get(original).cloned()
     }
 
+    /// Makes `scrub` the file read for `original` by every request that is
+    /// scrubbing: a small copy whose every frame is a picture of its own,
+    /// so any instant is one seek and one decode away. Cached under its
+    /// own name, like a proxy.
+    pub fn adopt_scrub(&self, original: &Path, scrub: PathBuf) {
+        if let Ok(mut scrubs) = self.scrubs.lock() {
+            scrubs.insert(original.to_path_buf(), scrub);
+        }
+    }
+
+    /// The scrub copy adopted for `original`, if one was.
+    pub fn scrub_of(&self, original: &Path) -> Option<PathBuf> {
+        self.scrubs.lock().ok()?.get(original).cloned()
+    }
+
     /// Drops every cached frame cut from `path` and its probed facts: for
     /// a file that changed on disk.
     pub fn forget(&self, path: &Path) {
@@ -725,10 +774,16 @@ impl ReaderPool {
         }
     }
 
-    /// The file a request reads: its proxy when it asks for one and the
-    /// file has one, the file itself otherwise.
+    /// The file a request reads: a scrubbing one its scrub copy, else its
+    /// proxy; one that asks for a proxy the proxy; the file itself when
+    /// it has neither.
     fn path_for(&self, request: &FrameRequest) -> PathBuf {
-        if request.proxy
+        if request.scrub
+            && let Some(scrub) = self.scrub_of(&request.path)
+        {
+            return scrub;
+        }
+        if (request.proxy || request.scrub)
             && let Some(proxy) = self.proxy_of(&request.path)
         {
             return proxy;
@@ -752,8 +807,12 @@ impl ReaderPool {
                     request.path.display(),
                     path.display()
                 );
-                if let Ok(mut proxies) = self.proxies.lock() {
-                    proxies.remove(&request.path);
+                for stand_ins in [&self.proxies, &self.scrubs] {
+                    if let Ok(mut stand_ins) = stand_ins.lock()
+                        && stand_ins.get(&request.path) == Some(&path)
+                    {
+                        stand_ins.remove(&request.path);
+                    }
                 }
                 path = request.path.clone();
                 self.facts_for(&path, request.still)?
@@ -1199,6 +1258,9 @@ impl ReaderPool {
         }
         if let Ok(mut proxies) = self.proxies.lock() {
             proxies.clear();
+        }
+        if let Ok(mut scrubs) = self.scrubs.lock() {
+            scrubs.clear();
         }
     }
 }

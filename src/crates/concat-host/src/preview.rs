@@ -47,9 +47,26 @@ pub struct FrameSpec {
     /// proxy drawn at full size is a blur, which is what Full was picked
     /// against.
     pub proxy: bool,
+    /// The playhead is being dragged: read each file's scrub copy where it
+    /// has one, else its proxy - any instant one decode away, the picture
+    /// coarse until the drag stops and the paused monitor asks for the file.
+    pub scrub: bool,
     /// What the timeline is output in: an HDR one keeps its clips' light
     /// above white and is rolled off for the SDR screen.
     pub color_space: ColorSpace,
+}
+
+impl FrameSpec {
+    /// Which copy of each file the frame is read from.
+    pub fn reading(&self) -> concat_media::Reading {
+        if self.scrub {
+            concat_media::Reading::Scrub
+        } else if self.proxy {
+            concat_media::Reading::Proxy
+        } else {
+            concat_media::Reading::Original
+        }
+    }
 }
 
 /// The reader pool behind the monitor, shareable across threads.
@@ -185,7 +202,7 @@ impl Monitor {
         spec: FrameSpec,
     ) -> Result<concat_export::PreviewSources, String> {
         let plan = self.plan_for(clips, settings, spec);
-        concat_export::preview_sources_of(&self.pool, &plan, spec.time, spec.proxy)
+        concat_export::preview_sources_of(&self.pool, &plan, spec.time, spec.reading())
     }
 
     /// Draws [`Monitor::frame_sources`] into a texture on the device this
@@ -292,7 +309,8 @@ impl Monitor {
         spec: FrameSpec,
     ) -> Result<Vec<u8>, String> {
         let plan = self.plan_for(clips, settings, spec);
-        let sources = concat_export::preview_sources_of(&self.pool, &plan, spec.time, spec.proxy)?;
+        let sources =
+            concat_export::preview_sources_of(&self.pool, &plan, spec.time, spec.reading())?;
         sources.pixels()
     }
 
@@ -314,7 +332,7 @@ impl Monitor {
             &plan,
             spec.time,
             frames.min(concat_media::prefetch::AHEAD),
-            spec.proxy,
+            spec.reading(),
         );
         let fps = (settings.rate_num as f64 / settings.rate_den.max(1) as f64).max(1.0);
         // The file a cut leads into, read a second early: opening a reader
@@ -332,10 +350,11 @@ impl Monitor {
         if !spec.moving {
             early.clear();
         } else {
-            let far = concat_export::preview_moments(&plan, spec.time + NEXT_CUT, 1, spec.proxy)
-                .pop()
-                .map(|far| far.frames)
-                .unwrap_or_default();
+            let far =
+                concat_export::preview_moments(&plan, spec.time + NEXT_CUT, 1, spec.reading())
+                    .pop()
+                    .map(|far| far.frames)
+                    .unwrap_or_default();
             let near = |path: &PathBuf| {
                 moments
                     .iter()

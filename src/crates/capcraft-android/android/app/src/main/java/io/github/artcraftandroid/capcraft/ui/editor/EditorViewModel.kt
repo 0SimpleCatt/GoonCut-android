@@ -537,8 +537,13 @@ class EditorViewModel(app: Application, val path: String) : AndroidViewModel(app
         }
     }
 
+    /** When the playhead was last scrubbed ([android.os.SystemClock.uptimeMillis]): the monitor reads the light scrub copies until it rests. */
+    var scrubbedAt = 0L
+        private set
+
     /** Moves the playhead (scrubbing): playback stops, the player follows. */
     fun scrub(to: Long) {
+        scrubbedAt = android.os.SystemClock.uptimeMillis()
         if (playing) stop()
         val end = timeline?.durationUs ?: 0L
         playhead = to.coerceIn(0L, end.coerceAtLeast(0L))
