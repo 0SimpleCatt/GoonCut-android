@@ -150,6 +150,7 @@ impl MobileSession {
                     VideoCodec::H264
                 },
                 ten_bit: false,
+                // the target to hold; the phone's encoder holds it in VBR
                 rate_mode: RateMode::Cbr,
                 bitrate_kbps: bitrate,
                 color_range: Default::default(),

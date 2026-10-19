@@ -224,8 +224,8 @@ pub enum RateMode {
     #[default]
     Vbr,
     /// Size first: `bitrate_kbps` is the target and the encoder keeps to it.
-    /// Only the soft encoders support it; hardware encoders fall back to
-    /// VBR because their rate control differs.
+    /// A phone's encoder is handed the target in VBR instead, as its own
+    /// CBR can starve an export (see `open_video`).
     Cbr,
 }
 
@@ -582,6 +582,11 @@ fn implied_kbps(
     (mbps * 1000.0).round().clamp(500.0, 200_000.0) as u32
 }
 
+/// The coarsest quantiser a phone's encoder may use, on H.264's and HEVC's
+/// 0-51 scale: past about 40 the blocks show at any size. Encoders from
+/// Android 12 on read it; older ones ignore it.
+const MEDIACODEC_QP_MAX: &str = "40";
+
 /// One encoder's context, set up and opened for the file: the frame's
 /// size, rate and tags, and the settings `encoder_name` is steered by.
 /// Returns the encoder and the pixel format it takes its pictures in.
@@ -730,9 +735,18 @@ fn open_video(
             "allow_sw" => "1",
         },
         // A phone's chip. The NDK's MediaCodec, not the Java one: no
-        // JavaVM is handed to FFmpeg, and the NDK needs none.
+        // JavaVM is handed to FFmpeg, and the NDK needs none. Always VBR,
+        // with CBR's target as its bitrate, as phone editors do: in CBR one
+        // phone starved an export, holding a 5.5 Mb/s target at 0.5 with
+        // its P frames at the coarsest quantiser, 51, and VBR is the only
+        // mode Android keeps its quality floor in. The quantiser is capped
+        // too, so an encoder that misjudges its budget still spends enough
+        // on each picture.
         _ if family == Family::MediaCodec => ffmpeg::dict! {
-            "bitrate_mode" => if cbr { "cbr" } else { "vbr" },
+            "bitrate_mode" => "vbr",
+            "qp_i_max" => MEDIACODEC_QP_MAX,
+            "qp_p_max" => MEDIACODEC_QP_MAX,
+            "qp_b_max" => MEDIACODEC_QP_MAX,
         },
         // Windows' Media Foundation, whatever the machine has behind it.
         _ if family == Family::MediaFoundation => ffmpeg::dict! {
