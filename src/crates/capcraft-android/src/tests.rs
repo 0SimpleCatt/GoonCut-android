@@ -1494,3 +1494,48 @@ fn an_outro_on_an_effect_row_closes_toward_the_layers_end() {
     );
     delete_project(made.path).expect("deleted");
 }
+
+/// A drag shows what the playhead at rest will: each video's scrub copy
+/// draws its picture turned the way the file's rotation says, at the
+/// instant asked for - a sixty-frame file and an HEVC one too.
+#[test]
+fn a_drag_shows_what_the_playhead_at_rest_will() {
+    use crate::session::Motion;
+    start();
+    let clips = [
+        ("cc-m-rotated-9x16.mp4", (1080, 1920), (90, 160)),
+        ("cc-g-4k60.mp4", (1920, 1080), (160, 90)),
+        ("cc-h-hevc-1080.mp4", (1920, 1080), (160, 90)),
+    ];
+    for (name, (width, height), (w, h)) in clips {
+        let Some(path) = media(name) else {
+            continue;
+        };
+        let made = create_project(name.to_owned(), width, height, 30).expect("made");
+        let session = MobileSession::open(made.path.clone()).expect("opens");
+        let item = session.import(path).expect("imports").id;
+        session.add_to_main(vec![item], 0).expect("placed");
+        concat_host::scheduler().drain();
+        let copies = std::fs::read_dir(std::path::Path::new(&made.path).join("cache/scrub"))
+            .map(|entries| entries.flatten().count())
+            .unwrap_or(0);
+        assert_eq!(copies, 1, "{name}: one scrub copy written");
+        for at in [1_000_000, 3_500_000, 7_250_000] {
+            let still = session.frame(at, w, h, Motion::Still).expect("a frame");
+            let dragged = session.frame(at, w, h, Motion::Scrubbing).expect("a frame");
+            assert_eq!(still.rgba.len(), dragged.rgba.len());
+            let apart: u64 = still
+                .rgba
+                .iter()
+                .zip(&dragged.rgba)
+                .map(|(a, b)| u64::from(a.abs_diff(*b)))
+                .sum();
+            let mean = apart as f64 / still.rgba.len() as f64;
+            assert!(
+                mean < 20.0,
+                "{name} at {at} us: the dragged picture is {mean:.1} apart from the still one"
+            );
+        }
+        delete_project(made.path).expect("deleted");
+    }
+}
